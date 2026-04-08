@@ -94,6 +94,9 @@ write_frpc_toml() {
   local_ip="${TUNBUN_LOCAL_IP:-127.0.0.1}"
   proxy_type="${TUNBUN_PROXY_TYPE:-http}"
   mapping="${TUNBUN_LOCAL_PORT_TO_FQDN:?TUNBUN_LOCAL_PORT_TO_FQDN is required for client mode}"
+  dash_port="${TUNBUN_DASHBOARD_PORT:-7500}"
+  dash_user="${TUNBUN_DASHBOARD_USER:-admin}"
+  dash_pass="${TUNBUN_DASHBOARD_PASSWORD:-admin}"
 
   case "$proxy_type" in
     http|https) ;;
@@ -109,6 +112,13 @@ write_frpc_toml() {
     if [ -n "${TUNBUN_TOKEN:-}" ]; then
       printf 'auth.method = "token"\n'
       printf 'auth.token = "%s"\n' "$(toml_escape "$TUNBUN_TOKEN")"
+    fi
+
+    if [ "${dash_port}" != "0" ]; then
+      printf 'webServer.addr = "0.0.0.0"\n'
+      printf 'webServer.port = %s\n' "$dash_port"
+      printf 'webServer.user = "%s"\n' "$(toml_escape "$dash_user")"
+      printf 'webServer.password = "%s"\n' "$(toml_escape "$dash_pass")"
     fi
 
     # Match frp defaults: TLS to frps (disable only if you know you need legacy TCP).
