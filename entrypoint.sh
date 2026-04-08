@@ -20,39 +20,61 @@ collect_ipv4() {
   fi
 }
 
-print_server_banner() {
+print_runtime_banner() {
   bind_port="${TUNBUN_BIND_PORT:-7000}"
   vhost_http="${TUNBUN_VHOST_HTTP_PORT:-80}"
   vhost_https="${TUNBUN_VHOST_HTTPS_PORT:-443}"
   dash_port="${TUNBUN_DASHBOARD_PORT:-7500}"
+  srv="${TUNBUN_SERVER_ADDR:-}"
+  sport="${TUNBUN_SERVER_PORT:-7000}"
+  local_ip="${TUNBUN_LOCAL_IP:-127.0.0.1}"
+  proxy_type="${TUNBUN_PROXY_TYPE:-http}"
+  mapping="${TUNBUN_LOCAL_PORT_TO_FQDN:-}"
 
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo " tunbun server (frps) — copy these values for your client env"
+  echo " tunbun ${MODE} (frp)"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo " frp control port (TUNBUN_SERVER_PORT): ${bind_port}"
-  echo " HTTP vhost port (bunny / load balancer → this port): ${vhost_http}"
-  echo " HTTPS vhost port: ${vhost_https}"
-  if [ "${dash_port}" != "0" ]; then
-    echo " Dashboard (frps UI) port: ${dash_port}"
-  fi
-  echo ""
-  echo " IPv4 addresses seen inside this container:"
-  collect_ipv4 | sort -u | sed '/^$/d' | sed 's/^/   /' || true
-  echo ""
-  echo " Use your bunny.net Anycast endpoint for the frp control port as"
-  echo " TUNBUN_SERVER_ADDR on the client when it differs from the IPs above."
-  echo ""
-  echo " Client env examples:"
-  echo "   TUNBUN_MODE=client"
-  echo "   TUNBUN_SERVER_ADDR=<hostname-or-ip-from-bunny>"
-  echo "   TUNBUN_SERVER_PORT=${bind_port}"
+  echo " mode: ${MODE}"
+  echo " log level: ${TUNBUN_LOG_LEVEL:-info}"
   if [ -n "${TUNBUN_TOKEN:-}" ]; then
-    echo "   TUNBUN_TOKEN=<same secret as server>"
+    echo " auth token: configured"
   else
-    echo "   (optional) TUNBUN_TOKEN=<shared secret> — recommended for production"
+    echo " auth token: not set"
   fi
-  echo "   TUNBUN_LOCAL_PORT_TO_FQDN=8080:app-xyz.bunny.run,3000:api-xyz.bunny.run"
+  echo ""
+
+  if [ "${MODE}" = "server" ]; then
+    echo " frp control port (client TUNBUN_SERVER_PORT): ${bind_port}"
+    echo " HTTP vhost port: ${vhost_http}"
+    echo " HTTPS vhost port: ${vhost_https}"
+    if [ "${dash_port}" != "0" ]; then
+      echo " dashboard port: ${dash_port}"
+    fi
+    echo ""
+    echo " IPv4 addresses seen inside this container:"
+    collect_ipv4 | sort -u | sed '/^$/d' | sed 's/^/   /' || true
+    echo ""
+    echo " client example values:"
+    echo "   TUNBUN_SERVER_ADDR=<hostname-or-ip-from-bunny>"
+    echo "   TUNBUN_SERVER_PORT=${bind_port}"
+  fi
+
+  if [ "${MODE}" = "client" ]; then
+    echo " server addr: ${srv:-<unset>}"
+    echo " server port: ${sport}"
+    echo " local ip: ${local_ip}"
+    echo " proxy type: ${proxy_type}"
+    if [ -n "${mapping}" ]; then
+      echo " mappings: ${mapping}"
+    else
+      echo " mappings: <unset>"
+    fi
+    if [ "${dash_port}" != "0" ]; then
+      echo " dashboard port: ${dash_port}"
+    fi
+  fi
+
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 }
@@ -170,12 +192,12 @@ write_frpc_toml() {
 case "$MODE" in
   server)
     write_frps_toml
-    print_server_banner
+    print_runtime_banner
     exec frps -c "$RUNTIME_CONF"
     ;;
   client)
     write_frpc_toml
-    print_server_banner
+    print_runtime_banner
     exec frpc -c "$RUNTIME_CONF"
     ;;
   *)
