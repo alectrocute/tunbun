@@ -1,34 +1,10 @@
-# Example: operate the same image as frps (bunny Magic Container) or frpc (your LAN).
-# No config files — only environment variables.
-# For pull zones, expose Anycast 80:80 and use that Anycast endpoint as Origin URL.
-
 services:
-  tunbun-server:
-    image: tunbun:latest
-    build: .
-    profiles: [server]
-    environment:
-      TUNBUN_MODE: server
-      TUNBUN_TOKEN: replace-with-random-secret
-      TUNBUN_DASHBOARD_USER: admin
-      TUNBUN_DASHBOARD_PASSWORD: change-me
-    ports:
-      - "7000:7000"
-      - "7500:7500"
-      - "80:80"
-
   tunbun-client:
-    image: tunbun:latest
-    build: .
-    profiles: [client]
-    # Linux: reach services on the host loopback. On Docker Desktop (Mac/Win),
-    # use TUNBUN_LOCAL_IP=host.docker.internal and drop network_mode: host.
+    image: alectrocute/tunbun:latest
     network_mode: host
     environment:
       TUNBUN_MODE: client
       TUNBUN_SERVER_ADDR: your-anycast-endpoint-ip-for-7000
-      TUNBUN_SERVER_PORT: "7000"
+      TUNBUN_SERVER_PORT: 7000
       TUNBUN_TOKEN: replace-with-random-secret
-      TUNBUN_LOCAL_IP: "127.0.0.1"
-      TUNBUN_PROXY_TYPE: http
       TUNBUN_LOCAL_PORT_TO_FQDN: "8080:example1-abc123.b-cdn.net,8081:example2-abc123.b-cdn.net"
