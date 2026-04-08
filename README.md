@@ -37,7 +37,7 @@ Create endpoints so Bunny can reach your server container:
 
 Important: Make sure port 80 is set as an Anycast endpoint, not CDN. If you don't, your pull-zone origin will be set to Bunny CDN and you will get 508 loops.
 
-Keep the `7000` endpoint/IP for `TUNBUN_SERVER_ADDR` in your client config.
+Note the provided `7000` endpoint/IP for use in `TUNBUN_SERVER_ADDR` on your client's `docker-compose.yml`.
 
 ### Pull zone origin
 
