@@ -4,5 +4,7 @@ sudo docker run --rm --network host \
   -e TUNBUN_SERVER_PORT=7000 \
   -e TUNBUN_TOKEN=my-secret-token \
   -e TUNBUN_LOCAL_PORT_TO_FQDN=4002:alectrocute-example-app.b-cdn.net \
+  -e TUNBUN_DASHBOARD_USER=admin \
+  -e TUNBUN_DASHBOARD_PASSWORD=admin \
   alectrocute/tunbun:latest
   
