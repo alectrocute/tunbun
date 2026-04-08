@@ -171,12 +171,11 @@ case "$MODE" in
   server)
     write_frps_toml
     print_server_banner
-    exec cat "$RUNTIME_CONF"
     exec frps -c "$RUNTIME_CONF"
     ;;
   client)
     write_frpc_toml
-    exec cat "$RUNTIME_CONF"
+    print_server_banner
     exec frpc -c "$RUNTIME_CONF"
     ;;
   *)
