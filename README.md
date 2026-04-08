@@ -59,10 +59,20 @@ docker run --rm --network host \
   tunbun:latest
 ```
 
-- **`TUNBUN_LOCAL_PORT_TO_FQDN`** — comma-separated list of `localPort:hostname` (example: `8080:app.bunny.run,3000:api.bunny.run`).
+- **`TUNBUN_LOCAL_PORT_TO_FQDN`** — comma-separated list of `localPort:hostname` (example: `8080:app.bunny.run,3000:api.bunny.run`). Optional **Host rewrite** for the local app: `localPort:publicHost>backendHost` (example: `8080:myapp.b-cdn.net>127.0.0.1`). See **Bunny CDN pull zones** below.
 - **`TUNBUN_PROXY_TYPE`** — `http` (default) or `https` for backends that speak TLS locally.
 
 **Docker Desktop (Mac / Windows):** host networking behaves differently. Prefer `TUNBUN_LOCAL_IP=host.docker.internal` and published ports instead of `--network host`.
+
+#### Bunny CDN pull zones (multi-app)
+
+1. **Origin URL** for each pull zone must be your **Magic Container hostname** (for example `mc-xxxx.bunny.run`) or its IP — never `https://yourzone.b-cdn.net`. If the origin is the same hostname as the pull zone, the edge fetches from itself and Bunny returns **508 Loop Detected**.
+
+2. Turn on **forward / use pull zone hostname toward origin** (wording varies in the dashboard) so requests hitting frps use `Host: yourzone.b-cdn.net`. Add each pull zone hostname to **`TUNBUN_LOCAL_PORT_TO_FQDN`** with the correct local port (one mapping per zone).
+
+3. If you still see **508** after the origin is correct, the app is often issuing **redirects or absolute URLs** to the `*.b-cdn.net` hostname; Bunny follows those and loops. Use a rewrite so the backend sees a neutral host, for example:
+   `TUNBUN_LOCAL_PORT_TO_FQDN=4002:alectrocute-example-app.b-cdn.net>127.0.0.1`
+   frp still matches traffic by `alectrocute-example-app.b-cdn.net`, but the process on port 4002 receives `Host: 127.0.0.1` (adjust if your stack needs `localhost` or a fixed dev hostname). Requires **`TUNBUN_PROXY_TYPE=http`** (default).
 
 ### 4. Try with Compose
 
@@ -104,7 +114,7 @@ docker compose --profile client up
 |----------|----------|-------------|
 | `TUNBUN_SERVER_ADDR` | yes | Hostname or IP of the server (often your Magic Container hostname). |
 | `TUNBUN_SERVER_PORT` | no (`7000`) | frp control port. |
-| `TUNBUN_LOCAL_PORT_TO_FQDN` | yes | `port:host,...` mappings (see above). |
+| `TUNBUN_LOCAL_PORT_TO_FQDN` | yes | `port:host,...` or `port:publicHost>rewriteHost` per mapping (see Bunny CDN section). |
 | `TUNBUN_LOCAL_IP` | `127.0.0.1` | Where the client reaches your service. |
 | `TUNBUN_PROXY_TYPE` | `http` | `http` or `https` local backend. |
 | `TUNBUN_FRPC_TLS_ENABLE` | `true` | Set to `false` only if your server uses legacy non-TLS frp. |

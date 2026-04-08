@@ -53,6 +53,7 @@ print_server_banner() {
     echo "   (optional) TUNBUN_TOKEN=<shared secret> — recommended for production"
   fi
   echo "   TUNBUN_LOCAL_PORT_TO_FQDN=8080:app-xyz.bunny.run,3000:api-xyz.bunny.run"
+  echo "   (Bunny CDN) 8080:myzone.b-cdn.net>127.0.0.1  — see README (avoids 508 redirect loops)"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 }
@@ -126,10 +127,22 @@ write_frpc_toml() {
     pair_trim=${pair#"${pair%%[![:space:]]*}"}
     pair_trim=${pair_trim%"${pair_trim##*[![:space:]]}"}
     [ -z "$pair_trim" ] && continue
+
+    host_header_rewrite=
+    case "$pair_trim" in
+      *'>'*)
+        left=${pair_trim%%>*}
+        host_header_rewrite=${pair_trim#*>}
+        host_header_rewrite=${host_header_rewrite#"${host_header_rewrite%%[![:space:]]*}"}
+        host_header_rewrite=${host_header_rewrite%"${host_header_rewrite##*[![:space:]]}"}
+        pair_trim=$left
+        ;;
+    esac
+
     port=${pair_trim%%:*}
     fqdn=${pair_trim#*:}
     if [ "$port" = "$pair_trim" ] || [ -z "$fqdn" ]; then
-      echo "tunbun: bad mapping (want port:fqdn): $pair" >&2
+      echo "tunbun: bad mapping (want port:fqdn or port:fqdn>rewriteHost): $pair" >&2
       exit 1
     fi
     case "$port" in
@@ -143,6 +156,13 @@ write_frpc_toml() {
       printf 'localIP = "%s"\n' "$(toml_escape "$local_ip")"
       printf 'localPort = %s\n' "$port"
       printf 'customDomains = ["%s"]\n' "$(toml_escape "$fqdn")"
+      if [ -n "$host_header_rewrite" ]; then
+        if [ "$proxy_type" != "http" ]; then
+          echo "tunbun: host rewrite (>...) is only supported with TUNBUN_PROXY_TYPE=http (got $proxy_type)" >&2
+          exit 1
+        fi
+        printf 'hostHeaderRewrite = "%s"\n' "$(toml_escape "$host_header_rewrite")"
+      fi
     } >>"$RUNTIME_CONF"
 
     idx=$((idx + 1))
