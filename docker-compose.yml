@@ -17,9 +17,8 @@ services:
       TUNBUN_TOKEN: replace-with-random-secret
     ports:
       - "7000:7000"
-      - "80:80"
-      - "443:443"
       - "7500:7500"
+      - "80:80"
 
   tunbun-client:
     image: tunbun:latest

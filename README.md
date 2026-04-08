@@ -35,7 +35,7 @@ The server listens for frp clients and for HTTP(S) requests on the vhost ports y
 Minimal example (local testing):
 
 ```bash
-docker run --rm -p 7000:7000 -p 80:80 -p 443:443 -p 7500:7500 \
+docker run --rm -p 7000:7000 -p 80:80 -p 7500:7500 \
   -e TUNBUN_MODE=server \
   -e TUNBUN_TOKEN=my-secret-token \
   tunbun:latest

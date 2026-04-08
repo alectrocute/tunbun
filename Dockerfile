@@ -21,6 +21,6 @@ RUN apk add --no-cache ca-certificates wget iproute2 \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 7000 80 443 7500
+EXPOSE 7000 7500 80
 
 ENTRYPOINT ["/entrypoint.sh"]
