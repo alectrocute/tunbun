@@ -1,0 +1,7 @@
+sudo docker run --rm --network host \
+  -e TUNBUN_MODE=client \
+  -e TUNBUN_SERVER_ADDR=109.224.229.216 \
+  -e TUNBUN_SERVER_PORT=7000 \
+  -e TUNBUN_TOKEN=my-secret-token \
+  -e TUNBUN_LOCAL_PORT_TO_FQDN=8080:alectrocute-example-app.b-cdn.net \
+  alectrocute/tunbun:latest
