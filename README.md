@@ -76,16 +76,6 @@ docker run --rm --network host \
    `curl -sSI "http://<your-origin-anycast-ip>/" -H "Host: yourzone.b-cdn.net"`
    If the response still shows `Server: BunnyCDN-*`, you are still pulling through Bunny instead of directly to your container.
 
-### 4. Try with Compose
-
-```bash
-# Terminal A — server
-docker compose --profile server up
-
-# Terminal B — client (edit env in docker-compose.yml first)
-docker compose --profile client up
-```
-
 ---
 
 ## Environment reference
