@@ -1,133 +1,139 @@
 # tunbun
 
-**tunbun** packages [frp](https://github.com/fatedier/frp) in a small Docker image you can run in two roles:
+`tunbun` runs [frp](https://github.com/fatedier/frp) in Docker so you can:
 
-- **Server** (`frps`) — typically on [bunny.net Magic Containers](https://docs.bunny.net/magic-containers) or any host with a public hostname and open ports.
-- **Client** (`frpc`) — on your home network or laptop, pointing at services you want on the internet (for example a local web app on port 8080).
+1. run a lightweight tunnel server on Bunny.net Magic Containers, and
+2. forward traffic from Bunny to services in your homelab via a client container.
 
-Everything is driven by **environment variables**. There are no checked-in config files; the container only writes a short-lived TOML file under `/tmp` at startup.
+## Quick architecture
 
-Traffic is exposed as **HTTP or HTTPS virtual hosts** (hostname → local port). That fits websites and APIs well; arbitrary raw TCP (for example some game or database protocols) is not what `TUNBUN_LOCAL_PORT_TO_FQDN` is for.
+- **Server (Bunny.net Magic Container):** `TUNBUN_MODE=server`
+- **Client (homelab Docker host):** `TUNBUN_MODE=client`
+- **Auth:** shared `TUNBUN_TOKEN` on both sides
+- **Routing:** `TUNBUN_LOCAL_PORT_TO_FQDN` maps `localPort:hostname`
 
----
+Example mapping:
 
-## Get started in a few minutes
+- `8080:app1-abc123.b-cdn.net` -> requests for that hostname go to `localhost:8080` on your homelab host.
 
-### 1. Get the image
+## 1) Simple Bunny.net setup (server)
 
-**If you use a published Hub image** (example maintainer tag):
+### Create the Magic Container
 
-```bash
-docker pull alectrocute/tunbun:latest
+Use image `alectrocute/tunbun:latest` and set:
+
+- `TUNBUN_MODE=server`
+- `TUNBUN_TOKEN=<long-random-secret>`
+- `TUNBUN_DASHBOARD_USER=admin`
+- `TUNBUN_DASHBOARD_PASSWORD=changeme`
+
+### Expose ports with Anycast endpoints
+
+Create endpoints so Bunny can reach your server container:
+
+- `7000 -> 7000` (frp control channel from client)
+- `7500 -> 7500` (frps dashboard)
+- `80 -> 80` (HTTP ingress from pull zones)
+
+Important: Make sure port 80 is set as an Anycast endpoint, not CDN. If you don't, your pull-zone origin will be set to Bunny CDN and you will get 508 loops.
+
+Keep the `7000` endpoint/IP for `TUNBUN_SERVER_ADDR` in your client config.
+
+### Pull zone origin
+
+For each Bunny pull zone you want to tunnel:
+
+- set **Origin URL** to your Anycast endpoint for port `80`
+- enable forwarding of the pull-zone hostname to origin (so origin receives `Host: <zone>.b-cdn.net`)
+- disable/override all caching
+
+Do not set a Bunny CDN hostname as the origin (that causes 508 loops).
+
+## 2) Simple homelab Docker Compose setup (client)
+
+Use this as your baseline `docker-compose.yml`:
+
+```yaml
+services:
+  tunbun-client:
+    image: alectrocute/tunbun:latest
+    container_name: tunbun-client
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TUNBUN_MODE: client
+      TUNBUN_SERVER_ADDR: YOUR_BUNNY_ANYCAST_IP_OR_HOST_FOR_7000
+      TUNBUN_SERVER_PORT: 7000
+      TUNBUN_TOKEN: REPLACE_WITH_THE_SAME_SECRET_AS_SERVER
+      TUNBUN_LOCAL_PORT_TO_FQDN: "8080:app1-abc123.b-cdn.net,8081:app2-abc123.b-cdn.net"
+      TUNBUN_DASHBOARD_USER: admin
+      TUNBUN_DASHBOARD_PASSWORD: changeme
 ```
 
-**Or build from this repo:**
+Then run, for example:
 
 ```bash
-docker build -t tunbun:latest .
-# or: ./build.sh
+docker compose up -d
+docker compose logs -f tunbun-client
 ```
 
-### 2. Run the server
+### Homelab notes
 
-The server listens for frp clients and for HTTP(S) requests on the vhost ports you configure.
+- `network_mode: host` is simplest on Linux homelab hosts.
+- If your apps run on another machine, set `TUNBUN_LOCAL_IP` to that reachable LAN IP.
+- On Docker Desktop (Mac/Windows), do not use host networking for this pattern; use published ports and `TUNBUN_LOCAL_IP=host.docker.internal`.
 
-Minimal example (local testing):
+## 3) Verify traffic path
+
+1. Confirm client is connected in logs (no auth/connection errors).
+2. Hit your pull-zone URL.
+3. If needed, test origin directly:
 
 ```bash
-docker run --rm -p 7000:7000 -p 80:80 -p 7500:7500 \
-  -e TUNBUN_MODE=server \
-  -e TUNBUN_TOKEN=my-secret-token \
-  tunbun:latest
+curl -sSI "http://<your-anycast-origin-ip>/" -H "Host: <your-zone>.b-cdn.net"
 ```
 
-On startup the container prints a short banner with ports, in-container IPs, and example client settings.
+If response headers still indicate Bunny CDN, your origin is still pointing at Bunny instead of your Magic Container endpoint.
 
-For bunny.net Magic Containers with pull zones, expose an **Anycast endpoint for `80:80`** and use that Anycast endpoint as the pull-zone origin.
-
-Set **`TUNBUN_DASHBOARD_PORT=0`** if you do not want the frps web dashboard.
-
-### 3. Run the client
-
-On the machine that runs the app (same host as the service, or reachable via `TUNBUN_LOCAL_IP`):
-
-```bash
-docker run --rm --network host \
-  -e TUNBUN_MODE=client \
-  -e TUNBUN_SERVER_ADDR=your-anycast-endpoint-for-7000 \
-  -e TUNBUN_SERVER_PORT=7000 \
-  -e TUNBUN_TOKEN=my-secret-token \
-  -e TUNBUN_LOCAL_PORT_TO_FQDN=8080:app-abc123.bunny.run \
-  tunbun:latest
-```
-
-- **`TUNBUN_LOCAL_PORT_TO_FQDN`** — comma-separated list of `localPort:hostname` (example: `8080:app.bunny.run,3000:api.bunny.run`).
-- **`TUNBUN_PROXY_TYPE`** — `http` (default) or `https` for backends that speak TLS locally.
-
-**Docker Desktop (Mac / Windows):** host networking behaves differently. Prefer `TUNBUN_LOCAL_IP=host.docker.internal` and published ports instead of `--network host`.
-
-#### Bunny CDN pull zones (multi-app)
-
-1. Create an **Anycast endpoint that exposes container port `80`** (`80:80`). Set each pull zone **Origin URL** to that Anycast endpoint (IP/host + port), **not** `mc-xxxx.bunny.run` and never `https://yourzone.b-cdn.net`. Using a CDN endpoint hostname as pull origin can recurse and return **508 Loop Detected**.
-
-2. Turn on **forward / use pull zone hostname toward origin** (wording varies in the dashboard) so requests hitting frps use `Host: yourzone.b-cdn.net`. Add each pull zone hostname to **`TUNBUN_LOCAL_PORT_TO_FQDN`** with the correct local port (one mapping per zone).
-
-3. If you still see **508**, verify origin reachability with:
-   `curl -sSI "http://<your-origin-anycast-ip>/" -H "Host: yourzone.b-cdn.net"`
-   If the response still shows `Server: BunnyCDN-*`, you are still pulling through Bunny instead of directly to your container.
-
----
-
-## Environment reference
+## Minimal environment reference
 
 ### Common
 
 | Variable | Description |
-|----------|-------------|
-| `TUNBUN_MODE` | `server` (default) or `client`. |
-| `TUNBUN_TOKEN` | Shared secret for frp auth. Strongly recommended; must match on server and client. |
-| `TUNBUN_LOG_LEVEL` | frp log level (default `info`). |
-| `TUNBUN_RUNTIME_CONF` | Path for ephemeral TOML (default `/tmp/tunbun-frp.toml`). |
+|---|---|
+| `TUNBUN_MODE` | `server` or `client` |
+| `TUNBUN_TOKEN` | Shared secret (must match on both sides) |
+| `TUNBUN_LOG_LEVEL` | frp log level (`info` default) |
+| `TUNBUN_DASHBOARD_PORT` | `7500` | set `0` to disable dashboard |
+| `TUNBUN_DASHBOARD_USER` | no | defaults to `admin` |
+| `TUNBUN_DASHBOARD_PASSWORD` | no | defaults to `changeme` |
 
-### Server (`TUNBUN_MODE=server`)
+### Server
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `TUNBUN_BIND_PORT` | `7000` | frp control port (`TUNBUN_SERVER_PORT` on the client). |
-| `TUNBUN_VHOST_HTTP_PORT` | `80` | HTTP vhost port frps listens on. |
-| `TUNBUN_VHOST_HTTPS_PORT` | `443` | HTTPS vhost port. |
-| `TUNBUN_DASHBOARD_PORT` | `7500` | frps dashboard; set to `0` to disable. |
-| `TUNBUN_DASHBOARD_USER` | `admin` | Dashboard login. |
-| `TUNBUN_DASHBOARD_PASSWORD` | `admin` | Dashboard password — change for production. |
+|---|---|---|
+| `TUNBUN_BIND_PORT` | `7000` | frp control port |
+| `TUNBUN_VHOST_HTTP_PORT` | `80` | incoming HTTP vhost port |
 
-### Client (`TUNBUN_MODE=client`)
+### Client
 
 | Variable | Required | Description |
-|----------|----------|-------------|
-| `TUNBUN_SERVER_ADDR` | yes | Hostname or IP for the frp control endpoint on port `7000` (typically your Anycast endpoint for `7000`). |
-| `TUNBUN_SERVER_PORT` | no (`7000`) | frp control port. |
-| `TUNBUN_LOCAL_PORT_TO_FQDN` | yes | `port:host,...` mappings (see above). |
-| `TUNBUN_LOCAL_IP` | `127.0.0.1` | Where the client reaches your service. |
-| `TUNBUN_PROXY_TYPE` | `http` | `http` or `https` local backend. |
-| `TUNBUN_FRPC_TLS_ENABLE` | `true` | Set to `false` only if your server uses legacy non-TLS frp. |
+|---|---|---|
+| `TUNBUN_SERVER_ADDR` | yes | Bunny Anycast IP/host for port `7000` |
+| `TUNBUN_SERVER_PORT` | no | defaults to `7000` |
+| `TUNBUN_LOCAL_PORT_TO_FQDN` | yes | `port:hostname,port:hostname` mappings |
+| `TUNBUN_LOCAL_IP` | no | defaults to `127.0.0.1` |
+| `TUNBUN_PROXY_TYPE` | no | `http` (default) or `https` |
 
----
-
-## Publishing your own image
-
-From the repo, after `docker login`:
+## Optional: build/publish image
 
 ```bash
+./build.sh
 ./build.sh --push
-# multi-arch (amd64 + arm64) for Magic Container–style hosts:
 ./build.sh --push --multiarch
 ```
 
-Optional version tag: `VERSION=0.1.0 ./build.sh --push`.
-
----
-
 ## Links
 
-- [bunny.net Magic Containers](https://docs.bunny.net/magic-containers)
+- [Bunny.net Magic Containers docs](https://docs.bunny.net/magic-containers)
 - [frp](https://github.com/fatedier/frp)
