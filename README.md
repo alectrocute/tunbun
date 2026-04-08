@@ -41,7 +41,9 @@ docker run --rm -p 7000:7000 -p 80:80 -p 7500:7500 \
   tunbun:latest
 ```
 
-On startup the container prints a short banner with ports, in-container IPs, and example client settings. For production, point DNS for your public hostnames at bunny (or your host) and map those hostnames to the container’s HTTP/HTTPS ports as your platform requires.
+On startup the container prints a short banner with ports, in-container IPs, and example client settings.
+
+For bunny.net Magic Containers with pull zones, expose an **Anycast endpoint for `80:80`** and use that Anycast endpoint as the pull-zone origin.
 
 Set **`TUNBUN_DASHBOARD_PORT=0`** if you do not want the frps web dashboard.
 
@@ -52,7 +54,7 @@ On the machine that runs the app (same host as the service, or reachable via `TU
 ```bash
 docker run --rm --network host \
   -e TUNBUN_MODE=client \
-  -e TUNBUN_SERVER_ADDR=your-server.bunny.run \
+  -e TUNBUN_SERVER_ADDR=your-anycast-endpoint-for-7000 \
   -e TUNBUN_SERVER_PORT=7000 \
   -e TUNBUN_TOKEN=my-secret-token \
   -e TUNBUN_LOCAL_PORT_TO_FQDN=8080:app-abc123.bunny.run \
@@ -66,11 +68,13 @@ docker run --rm --network host \
 
 #### Bunny CDN pull zones (multi-app)
 
-1. **Origin URL** for each pull zone must be your **Magic Container hostname** (for example `mc-xxxx.bunny.run`) or its IP — never `https://yourzone.b-cdn.net`. If the origin is the same hostname as the pull zone, the edge fetches from itself and Bunny returns **508 Loop Detected**.
+1. Create an **Anycast endpoint that exposes container port `80`** (`80:80`). Set each pull zone **Origin URL** to that Anycast endpoint (IP/host + port), **not** `mc-xxxx.bunny.run` and never `https://yourzone.b-cdn.net`. Using a CDN endpoint hostname as pull origin can recurse and return **508 Loop Detected**.
 
 2. Turn on **forward / use pull zone hostname toward origin** (wording varies in the dashboard) so requests hitting frps use `Host: yourzone.b-cdn.net`. Add each pull zone hostname to **`TUNBUN_LOCAL_PORT_TO_FQDN`** with the correct local port (one mapping per zone).
 
-3. If you still see **508** after the origin is correct, the app is often issuing **redirects or absolute URLs** to the `*.b-cdn.net` hostname; Bunny then follows those and loops. Fix this in the app/runtime by disabling host-based canonical redirects for this origin path, or by setting the app's canonical/base URL to the pull-zone host you want to serve.
+3. If you still see **508**, verify origin reachability with:
+   `curl -sSI "http://<your-origin-anycast-ip>/" -H "Host: yourzone.b-cdn.net"`
+   If the response still shows `Server: BunnyCDN-*`, you are still pulling through Bunny instead of directly to your container.
 
 ### 4. Try with Compose
 
@@ -110,7 +114,7 @@ docker compose --profile client up
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TUNBUN_SERVER_ADDR` | yes | Hostname or IP of the server (often your Magic Container hostname). |
+| `TUNBUN_SERVER_ADDR` | yes | Hostname or IP for the frp control endpoint on port `7000` (typically your Anycast endpoint for `7000`). |
 | `TUNBUN_SERVER_PORT` | no (`7000`) | frp control port. |
 | `TUNBUN_LOCAL_PORT_TO_FQDN` | yes | `port:host,...` mappings (see above). |
 | `TUNBUN_LOCAL_IP` | `127.0.0.1` | Where the client reaches your service. |

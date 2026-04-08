@@ -40,7 +40,7 @@ print_server_banner() {
   echo " IPv4 addresses seen inside this container:"
   collect_ipv4 | sort -u | sed '/^$/d' | sed 's/^/   /' || true
   echo ""
-  echo " Use your bunny.net Magic Container hostname or anycast endpoint as"
+  echo " Use your bunny.net Anycast endpoint for the frp control port as"
   echo " TUNBUN_SERVER_ADDR on the client when it differs from the IPs above."
   echo ""
   echo " Client env examples:"

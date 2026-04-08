@@ -1,5 +1,6 @@
 # Example: operate the same image as frps (bunny Magic Container) or frpc (your LAN).
 # No config files — only environment variables.
+# For pull zones, expose Anycast 80:80 and use that Anycast endpoint as Origin URL.
 
 services:
   tunbun-server:
@@ -8,13 +9,9 @@ services:
     profiles: [server]
     environment:
       TUNBUN_MODE: server
-      TUNBUN_BIND_PORT: "7000"
-      TUNBUN_VHOST_HTTP_PORT: "80"
-      TUNBUN_VHOST_HTTPS_PORT: "443"
-      TUNBUN_DASHBOARD_PORT: "7500"
+      TUNBUN_TOKEN: replace-with-random-secret
       TUNBUN_DASHBOARD_USER: admin
       TUNBUN_DASHBOARD_PASSWORD: change-me
-      TUNBUN_TOKEN: replace-with-random-secret
     ports:
       - "7000:7000"
       - "7500:7500"
@@ -29,9 +26,9 @@ services:
     network_mode: host
     environment:
       TUNBUN_MODE: client
-      TUNBUN_SERVER_ADDR: your-magic-container.bunny.run
+      TUNBUN_SERVER_ADDR: your-anycast-endpoint-ip-for-7000
       TUNBUN_SERVER_PORT: "7000"
       TUNBUN_TOKEN: replace-with-random-secret
       TUNBUN_LOCAL_IP: "127.0.0.1"
       TUNBUN_PROXY_TYPE: http
-      TUNBUN_LOCAL_PORT_TO_FQDN: "8080:example1-abc123.bunny.run,8081:example2-abc123.bunny.run"
+      TUNBUN_LOCAL_PORT_TO_FQDN: "8080:example1-abc123.b-cdn.net,8081:example2-abc123.b-cdn.net"
