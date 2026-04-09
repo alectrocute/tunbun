@@ -19,6 +19,7 @@ RUN apk add --no-cache ca-certificates wget iproute2 \
   && rm -rf "/tmp/frp_${FRP_VERSION}_linux_${FRP_ARCH}"
 
 COPY entrypoint.sh /entrypoint.sh
+COPY frpc_store.json /frpc_store.json
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 7000 7500 80

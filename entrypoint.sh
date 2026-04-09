@@ -130,6 +130,7 @@ write_frpc_toml() {
     printf 'serverPort = %s\n' "$sport"
     printf 'log.to = "console"\n'
     printf 'log.level = "%s"\n' "${TUNBUN_LOG_LEVEL:-info}"
+    printf 'store.path = "/frpc_store.json"\n'
 
     if [ -n "${TUNBUN_TOKEN:-}" ]; then
       printf 'auth.method = "token"\n'
